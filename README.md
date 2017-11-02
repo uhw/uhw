@@ -9,5 +9,5 @@ A GAN system that can generate anime character CGs based on given tags
   - Describes a new loss function called inception score.
 
 -  [How to train your DRAGAN](https://arxiv.org/pdf/1705.07215.pdf)
-  - Original paper proposing DRAGAN approach.
-  - Claims to be computationally less intensive.
+    - Original paper proposing DRAGAN approach.
+    - Claims to be computationally less intensive.
