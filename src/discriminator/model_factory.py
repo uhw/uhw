@@ -1,5 +1,5 @@
 from keras.models import Model
-from keras.layers import Input, Conv2D, BatchNormalization, Activation, LeakyReLU, Add, Dense
+from keras.layers import Input, Conv2D, Activation, LeakyReLU, Add, Dense
 
 
 class AnimeDiscriminatorFactory(object):
@@ -114,5 +114,11 @@ class AnimeDiscriminatorFactory(object):
             layer = intermediate_layer(
                 layer, filters, intermediate_kernel_size)
 
-        outputs = Dense(2, activation="sigmoid")(layer)
-        return Model(inputs=inputs, outputs=outputs)
+        outputs = Dense(1, activation="sigmoid")(layer)
+
+        model = Model(inputs=inputs, outputs=outputs)
+        model.compile(loss="binary_crossentropy",
+                      optimizer="adam",
+                      metrics=["accuracy"])
+
+        return model
