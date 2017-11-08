@@ -132,11 +132,11 @@ class AnimeGeneratorFactory():
                     Keras layer
             """
             shortcut = layer
-            layer = Conv2DTranspose(filters=filters, kernel_size=(
+            layer = Conv2D(filters=filters, kernel_size=(
                 3, 3), strides=(1, 1), padding="same")(layer)
             layer = BatchNormalization(momentum=momentum)(layer)
             layer = Activation("relu")(layer)
-            layer = Conv2DTranspose(filters=filters, kernel_size=(
+            layer = Conv2D(filters=filters, kernel_size=(
                 3, 3), strides=(1, 1), padding="same")(layer)
             layer = BatchNormalization(momentum=momentum)(layer)
 
