@@ -9,7 +9,7 @@ from keras.optimizers import Adam
 import tensorflow as tf
 from keras import backend as K  # needed for mixing TensorFlow and Keras commands
 config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.75
+config.gpu_options.per_process_gpu_memory_fraction = 0.9
 sess = tf.Session(config=config)
 K.set_session(sess)
 
@@ -29,22 +29,18 @@ from keras.preprocessing import image as IM
 from keras.preprocessing.image import ImageDataGenerator, array_to_img
 
 
-# Change this!!
-train_data_dir = '/data/shibberu/dataset-download/faces'
-valid_data_dir = '/data/shibberu/dataset-download/faces'
-
 class Subpixel(Conv2D):
     def __init__(self,
                  filters,
                  kernel_size,
                  r,
-                 padding='same',
+                 padding="same",
                  data_format=None,
-                 strides=(1,1),
+                 strides=(1, 1),
                  activation=None,
                  use_bias=True,
-                 kernel_initializer='glorot_uniform',
-                 bias_initializer='zeros',
+                 kernel_initializer="glorot_uniform",
+                 bias_initializer="zeros",
                  kernel_regularizer=None,
                  bias_regularizer=None,
                  activity_regularizer=None,
@@ -52,7 +48,7 @@ class Subpixel(Conv2D):
                  bias_constraint=None,
                  **kwargs):
         super(Subpixel, self).__init__(
-            filters=r*r*filters,
+            filters=r * r * filters,
             kernel_size=kernel_size,
             strides=strides,
             padding=padding,
@@ -72,13 +68,17 @@ class Subpixel(Conv2D):
     def _phase_shift(self, I):
         r = self.r
         bsize, a, b, c = I.get_shape().as_list()
-        bsize = K.shape(I)[0] # Handling Dimension(None) type for undefined batch dim
-        X = K.reshape(I, [bsize, a, b, int(c/(r*r)),r, r]) # bsize, a, b, c/(r*r), r, r
-        X = K.permute_dimensions(X, (0, 1, 2, 5, 4, 3))  # bsize, a, b, r, r, c/(r*r)
-        #Keras backend does not support tf.split, so in future versions this could be nicer
-        X = [X[:,i,:,:,:,:] for i in range(a)] # a, [bsize, b, r, r, c/(r*r)
+        # Handling Dimension(None) type for undefined batch dim
+        bsize = K.shape(I)[0]
+        # bsize, a, b, c/(r*r), r, r
+        X = K.reshape(I, [bsize, a, b, int(c / (r * r)), r, r])
+        # bsize, a, b, r, r, c/(r*r)
+        X = K.permute_dimensions(X, (0, 1, 2, 5, 4, 3))
+        # Keras backend does not support tf.split, so in future versions this could be nicer
+        X = [X[:, i, :, :, :, :]
+             for i in range(a)]  # a, [bsize, b, r, r, c/(r*r)
         X = K.concatenate(X, 2)  # bsize, b, a*r, r, c/(r*r)
-        X = [X[:,i,:,:,:] for i in range(b)] # b, [bsize, r, r, c/(r*r)
+        X = [X[:, i, :, :, :] for i in range(b)]  # b, [bsize, r, r, c/(r*r)
         X = K.concatenate(X, 2)  # bsize, a*r, b*r, c/(r*r)
         return X
 
@@ -87,15 +87,16 @@ class Subpixel(Conv2D):
 
     def compute_output_shape(self, input_shape):
         unshifted = super(Subpixel, self).compute_output_shape(input_shape)
-        return (unshifted[0], int(self.r*unshifted[1]), int(self.r*unshifted[2]), int(unshifted[3]/(self.r*self.r)))
+        return (unshifted[0], int(self.r * unshifted[1]), int(self.r * unshifted[2]), int(unshifted[3] / (self.r * self.r)))
 
     def get_config(self):
         config = super(Conv2D, self).get_config()
-        config.pop('rank')
-        config.pop('dilation_rate')
-        config['filters']/=int(self.r*self.r)
-        config['r'] = self.r
+        config.pop("rank")
+        config.pop("dilation_rate")
+        config["filters"] /= int(self.r * self.r)
+        config["r"] = self.r
         return config
+
 
 class AnimeGeneratorFactory():
     def build(self, input_shape):
@@ -116,6 +117,7 @@ class AnimeGeneratorFactory():
         FINAL_FILTERS = 3
         #FINAL_FILTERS = 1
         INITIAL_FILTERS = 64
+
         def residual_block(layer, filters, momentum):
             """
                 Residual Block consisting of
@@ -130,10 +132,12 @@ class AnimeGeneratorFactory():
                     Keras layer
             """
             shortcut = layer
-            layer = Conv2DTranspose(filters=filters, kernel_size=(3, 3), strides=(1, 1), padding="same")(layer)
+            layer = Conv2DTranspose(filters=filters, kernel_size=(
+                3, 3), strides=(1, 1), padding="same")(layer)
             layer = BatchNormalization(momentum=momentum)(layer)
-            layer = Activation('relu')(layer)
-            layer = Conv2DTranspose(filters=filters, kernel_size=(3, 3), strides=(1, 1), padding="same")(layer)
+            layer = Activation("relu")(layer)
+            layer = Conv2DTranspose(filters=filters, kernel_size=(
+                3, 3), strides=(1, 1), padding="same")(layer)
             layer = BatchNormalization(momentum=momentum)(layer)
 
             layer = Add()([layer, shortcut])
@@ -174,11 +178,12 @@ class AnimeGeneratorFactory():
                     Keras layer
             """
 
-            layer = Conv2D(filters=filters, kernel_size=(3, 3), strides=(1, 1), padding="same")(layer)
+            layer = Conv2D(filters=filters, kernel_size=(3, 3),
+                           strides=(1, 1), padding="same")(layer)
             layer = Subpixel(filters, (3, 3), 2)(layer)
 
             layer = BatchNormalization(momentum=momentum)(layer)
-            layer = Activation('relu')(layer)
+            layer = Activation("relu")(layer)
             return layer
 
         def subpixel_layer(layer, number, filters, momentum):
@@ -199,39 +204,38 @@ class AnimeGeneratorFactory():
             for _ in range(number):
                 layer = subpixel_block(layer, filters, momentum)
             return layer
+
         inputs = Input(shape=input_shape)
         filters = INITIAL_FILTERS
         layer = Dense(DEPTH * DIM * DIM)(inputs)
 
         layer = BatchNormalization(momentum=MOMENTUM)(layer)
-        layer = Activation('relu')(layer)
+        layer = Activation("relu")(layer)
         layer = Reshape((DIM, DIM, DEPTH))(layer)
         old = layer
-        print("starting layer built")
+
         # 16 residual layers
         layer = residual_layer(layer, NUM_RESIDUAL, filters, MOMENTUM)
 
         layer = BatchNormalization(momentum=MOMENTUM)(layer)
-        layer = Activation('relu')(layer)
+        layer = Activation("relu")(layer)
         layer = Add()([layer, old])
-
-        print("residual layer built")
 
         filters *= 4
         # 3 sub-pixel layers
         layer = subpixel_layer(layer, NUM_SUBPIXEL, filters, MOMENTUM)
 
-        print("sub-pixel layer built")
+        layer = Conv2D(filters=FINAL_FILTERS, kernel_size=(
+            9, 9), strides=(1, 1), padding="same")(layer)
+        layer = Activation("tanh")(layer)
 
-        layer = Conv2D(filters=FINAL_FILTERS, kernel_size=(9, 9), strides=(1, 1), padding="same")(layer)
-        layer = Activation('tanh')(layer)
-
-        print("final layer built")
         model = Model(inputs=inputs, outputs=layer)
+        optimizer = Adam(lr=0.00015, beta_1=0.5)
         model.compile(loss="binary_crossentropy",
-                      optimizer="adam",
+                      optimizer=optimizer,
                       metrics=["accuracy"])
         return model
+
 
 class AnimeDiscriminatorFactory(object):
     """
@@ -339,138 +343,163 @@ class AnimeDiscriminatorFactory(object):
         reshaped_output = Reshape((1,))(outputs)
 
         model = Model(inputs=inputs, outputs=reshaped_output)
+
+        optimizer = Adam(lr=0.0002, beta_1=0.5)
         model.compile(loss="binary_crossentropy",
-                      optimizer="adam",
+                      optimizer=optimizer,
                       metrics=["accuracy"])
 
         return model
 
-# Optimizer
-adam = Adam(lr=0.0002, beta_1=0.5)
 
-num_image = 50000
-images_train = np.empty((num_image, 64, 64, 3))
-dropout = 0.4
-depth = 256
-dim = 8
-input_dim = 128
-batch_size = 1
-epochs = 200
-
-dLosses = []
-gLosses = []
-
-generator = AnimeGeneratorFactory().build([input_dim])
-ganInput = Input((input_dim,))
-x = generator(ganInput)
-
-discriminator = AnimeDiscriminatorFactory().build((64, 64, 3))
-ganOutput = discriminator(x)
-
-gan = Model(inputs=ganInput, outputs=ganOutput)
-gan.compile(loss='binary_crossentropy', optimizer=adam)
+def data_generator(batch_size, train_data_directory):
+    train_datagen = ImageDataGenerator(shear_range=0.2,
+                                       zoom_range=0.2,
+                                       horizontal_flip=True)
+    train_generator = train_datagen.flow_from_directory(train_data_directory,
+                                                        target_size=(64, 64),
+                                                        batch_size=batch_size,
+                                                        class_mode="binary")
+    return train_generator
 
 
-def train(epochs=1, batchSize=128):
-    print('Epochs:', epochs)
-    print('Batch size:', batchSize)
+def build_network(input_shape, noise_shape):
+    discriminator = AnimeDiscriminatorFactory().build(input_shape)
+    generator = AnimeGeneratorFactory().build(noise_shape)
 
-    train_datagen = ImageDataGenerator(
-        shear_range=0.2,
-        zoom_range=0.2,
-        horizontal_flip=True)
-    valid_datagen = ImageDataGenerator(rescale = (1./255))
+    gan_inputs = Input(noise_shape)
+    generator_outputs = generator(gan_inputs)
+    gan_outputs = discriminator(generator_outputs)
+    gan = Model(inputs=gan_inputs, outputs=gan_outputs)
+    optimizer = Adam(lr=0.00015, beta_1=0.5)
+    gan.compile(loss="binary_crossentropy",
+                optimizer=optimizer,
+                metrics=["accuracy"])
+    return (discriminator, generator, gan)
 
-    train_generator = train_datagen.flow_from_directory(
-        train_data_dir,
-        target_size=(64, 64),
-        batch_size=batchSize,
-        class_mode='binary')
+# Save the generator and discriminator networks (and weights) for later use
 
-    valid_generator = valid_datagen.flow_from_directory(
-        valid_data_dir,
-        target_size=(64, 64),
-        batch_size=batchSize,
-        class_mode='binary')
 
+def save_models(epoch, generator, discriminator, gan):
+    print("saving model...", end="")
+    generator.save(
+        "./collected_models/gan_generator_epoch_{0}.h5".format(epoch))
+    discriminator.save(
+        "./collected_models/gan_discriminator_epoch_{0}.h5".format(epoch))
+    gan.save("./collected_models/gan_core_epoch_{0}".format(epoch))
+    print("done")
+
+
+def execute(epochs, batch_size, input_shape, noise_shape, train_generator, discriminator, generator, gan):
     e = 1
+    d_losses_real = []
+    d_losses_fake = []
+    g_losses = []
+    stagnation_counter = 0
     for batch, label in train_generator:
         dloss = 0
         gloss = 0
-        print('-'*15, 'Epoch %d' % e, '-'*15)
+
+        # print("-" * 15, "Epoch %d" % e, "-" * 15)
 
         # Get a random set of input noise and images
-        noise = np.random.normal(0, 1, size=[batchSize, input_dim])
-        #imageBatch = images_train[np.random.randint(0, images_train.shape[0], size=batchSize)]
+        real_data = batch
+        noise = np.random.normal(0, 1, size=(batch_size, ) + noise_shape)
+        fake_data = generator.predict(noise)
 
-        # Generate fake images
-        generatedImages = generator.predict(noise)
-        # print(np.shape(imageBatch), np.shape(generatedImages))
-        images = np.concatenate([batch, generatedImages])
-        # print(X.shape)
+        # discriminator_images = np.concatenate([real_data, fake_data])
 
         # Labels for generated and real data
-        labels = np.concatenate((label, np.ones(batchSize)))
+        real_label = np.ones(batch_size) - np.random.random_sample(batch_size) * 0.2
+        fake_label = np.random.normal(batch_size) * 0.2
+        # discriminator_labels = np.concatenate((real_label, fake_label))
 
         # Train discriminator
-        print("discriminator start...", end="")
+        # print("discriminator start...", end="")
         discriminator.trainable = True
-        (dloss, dAcc) = discriminator.train_on_batch(images, labels)
-        print("done")
+        generator.trainable = False
+        d_loss_real, d_acc_real = discriminator.train_on_batch(
+            real_data, real_label)
+        d_loss_fake, d_acc_fake = discriminator.train_on_batch(
+            fake_data, fake_label)
+        # d_loss, d_acc = discriminator.train_on_batch(discriminator_images,
+        #                                              discriminator_labels)
+        # print("done")
 
         # Train generator
-        print("generator start...", end="")
-        noise = np.random.normal(0, 1, size=[batchSize, input_dim])
-        yGen = np.ones(batchSize)
+        # print("generator start...", end="")
         discriminator.trainable = False
-        gloss = gan.train_on_batch(noise, yGen)
-        print("done")
+        generator.trainable = True
+        gan_noise = np.random.normal(0, 1, size=(batch_size, ) + noise_shape)
+        gan_label = real_label
+        g_loss, g_acc = gan.train_on_batch(gan_noise, gan_label)
+        # print("done")
 
         # Store loss of most recent batch from this epoch
-        dLosses.append(dloss)
-        gLosses.append(gloss)
+        d_losses_real.append(d_loss_real)
+        d_losses_fake.append(d_loss_fake)
+        g_losses.append(g_loss)
 
-        print("dloss: ", dloss)
-        print("gloss: ", gloss)
+        # According to this Github (https://github.com/forcecore/Keras-GAN-Animeface-Character),
+        # the network will simply fail if any of these start at 15.
+        if d_loss_real >= 15 or d_loss_fake >= 15 or g_loss >= 15:
+            stagnation_counter += 1
 
-        if e % 1000 == 0:
-            print("saving generated image...", end="")
-            for i in range(generatedImages.shape[0]):
-                g_image = array_to_img(generatedImages[i])
-                g_image.save("./collected_data/gan_generated_image_epoch_{0}_{1}.png".format(e, i))
-            print("done")
+            if stagnation_counter >= 10 and e < 100:
+                return False
+
+        # Log some data. Accuracy will probably be 0. We want the loss to decrease though.
+        # print("d real: ", (d_loss_real, d_acc_real))
+        # print("d loss: ", (d_loss_fake, d_acc_real))
+        # print("g loss: ", (g_loss, g_acc))
+
+        if e % 100 == 0:
+            # print("saving generated image...", end="")
+            for i in range(fake_data.shape[0]):
+                g_image = array_to_img(fake_data[i])
+                g_image.save(
+                    "./collected_data/gan_generated_image_epoch_{0}_{1}.png".format(e, i))
+            # print("done")
 
         if e == 1 or e % 20 == 0:
-            print("saving model...", end="")
-            saveModels(e)
-            print("done")
-
-        # Plot losses from every epoch
-        # print("plotting losses...", end="")
-        # plotLoss(e)
-        # print("done")
+            # print("saving model...", end="")
+            save_models(e, generator, discriminator, gan)
+            print("d real: ", (d_loss_real, d_acc_real))
+            print("d loss: ", (d_loss_fake, d_acc_real))
+            print("g loss: ", (g_loss, g_acc))
+            # print("done")
 
         if e >= epochs:
             break
         e += 1
 
-
-# Plot the loss from each batch
-def plotLoss(epoch):
-    plt.figure(figsize=(10, 8))
-    plt.plot(dLosses, label='Discriminitive loss')
-    # plt.plot(gLosses, label='Generative loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.savefig('./collected_data/gan_loss_epoch_%d.png' % epoch)
-    plt.clf()
-
-# Save the generator and discriminator networks (and weights) for later use
-def saveModels(epoch):
-    print("saving")
-    generator.save("./collected_models/gan_generator_epoch_{0}.h5".format(epoch))
-    discriminator.save("./collected_models/gan_discriminator_epoch_{0}.h5".format(epoch))
+    return True
 
 
-train(10000, 8)
+def train(epochs, batch_size, input_shape, noise_shape, train_data_directory):
+    train_generator = data_generator(batch_size, train_data_directory)
+    discriminator, generator, gan = build_network(input_shape, noise_shape)
+
+    run = True
+    while run:
+        try:
+            status = execute(epochs, batch_size, input_shape, noise_shape, train_generator,
+                              discriminator, generator, gan)
+            if status:
+                print("[INFO] Model Completed")
+                run = False
+            else:
+                print("[INFO] stagnant GAN")
+                run = True
+                train_generator = data_generator(batch_size, train_data_directory)
+                discriminator, generator, gan = build_network(input_shape, noise_shape)
+        except Exception as e:
+            print(e)
+            run = True
+            train_generator = data_generator(batch_size, train_data_directory)
+            discriminator, generator, gan = build_network(input_shape, noise_shape)
+            pass
+
+
+train(100000, 32, (64, 64, 3), (1, 1, 128),
+      "/data/shibberu/dataset-download/faces")
