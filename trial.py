@@ -100,6 +100,72 @@ class AnimeGeneratorFactory():
             Output:
                 Keras Model
         """
+
+        def get_gen_normal(noise_shape):
+            noise_shape = noise_shape
+            """
+            Changing padding = 'same' in the first layer makes a lot fo difference!!!!
+            """
+            # kernel_init = RandomNormal(mean=0.0, stddev=0.01)
+            kernel_init = 'glorot_uniform'
+
+            gen_input = Input(shape=noise_shape)  # if want to directly use with conv layer next
+            # gen_input = Input(shape = [noise_shape]) #if want to use with dense layer next
+
+            generator = Conv2DTranspose(filters=512, kernel_size=(4, 4), strides=(1, 1), padding="valid",
+                                        data_format="channels_last", kernel_initializer=kernel_init)(gen_input)
+            generator = BatchNormalization(momentum=0.5)(generator)
+            generator = LeakyReLU(0.2)(generator)
+
+            # generator = bilinear2x(generator,256,kernel_size=(4,4))
+            # generator = UpSampling2D(size=(2, 2))(generator)
+            # generator = SubPixelUpscaling(scale_factor=2)(generator)
+            # generator = Conv2D(filters = 256, kernel_size = (4,4), strides = (1,1), padding = "same", data_format = "channels_last", kernel_initializer = kernel_init)(generator)
+            generator = Conv2DTranspose(filters=256, kernel_size=(4, 4), strides=(2, 2), padding="same",
+                                        data_format="channels_last", kernel_initializer=kernel_init)(generator)
+            generator = BatchNormalization(momentum=0.5)(generator)
+            generator = LeakyReLU(0.2)(generator)
+
+            # generator = bilinear2x(generator,128,kernel_size=(4,4))
+            # generator = UpSampling2D(size=(2, 2))(generator)
+            # generator = SubPixelUpscaling(scale_factor=2)(generator)
+            # generator = Conv2D(filters = 128, kernel_size = (4,4), strides = (1,1), padding = "same", data_format = "channels_last", kernel_initializer = kernel_init)(generator)
+            generator = Conv2DTranspose(filters=128, kernel_size=(4, 4), strides=(2, 2), padding="same",
+                                        data_format="channels_last", kernel_initializer=kernel_init)(generator)
+            generator = BatchNormalization(momentum=0.5)(generator)
+            generator = LeakyReLU(0.2)(generator)
+
+            # generator = bilinear2x(generator,64,kernel_size=(4,4))
+            # generator = UpSampling2D(size=(2, 2))(generator)
+            # generator = SubPixelUpscaling(scale_factor=2)(generator)
+            # generator = Conv2D(filters = 64, kernel_size = (4,4), strides = (1,1), padding = "same", data_format = "channels_last", kernel_initializer = kernel_init)(generator)
+            generator = Conv2DTranspose(filters=64, kernel_size=(4, 4), strides=(2, 2), padding="same",
+                                        data_format="channels_last", kernel_initializer=kernel_init)(generator)
+            generator = BatchNormalization(momentum=0.5)(generator)
+            generator = LeakyReLU(0.2)(generator)
+
+            generator = Conv2D(filters=64, kernel_size=(3, 3), strides=(1, 1), padding="same",
+                               data_format="channels_last", kernel_initializer=kernel_init)(generator)
+            generator = BatchNormalization(momentum=0.5)(generator)
+            generator = LeakyReLU(0.2)(generator)
+
+            # generator = bilinear2x(generator,3,kernel_size=(3,3))
+            # generator = UpSampling2D(size=(2, 2))(generator)
+            # generator = SubPixelUpscaling(scale_factor=2)(generator)
+            # generator = Conv2D(filters = 3, kernel_size = (4,4), strides = (1,1), padding = "same", data_format = "channels_last", kernel_initializer = kernel_init)(generator)
+            generator = Conv2DTranspose(filters=3, kernel_size=(4, 4), strides=(2, 2), padding="same",
+                                        data_format="channels_last", kernel_initializer=kernel_init)(generator)
+            generator = Activation('tanh')(generator)
+
+            gen_opt = Adam(lr=0.00015, beta_1=0.5)
+            generator_model = Model(input=gen_input, output=generator)
+            generator_model.compile(loss='binary_crossentropy', optimizer=gen_opt, metrics=['accuracy'])
+            generator_model.summary()
+
+            return generator_model
+
+        return get_gen_normal(input_shape)
+
         MOMENTUM = 0.9
         DIM = 16
         DEPTH = 64
