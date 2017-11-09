@@ -456,7 +456,7 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
 
         # Log some data. Accuracy will probably be 0. We want the loss to decrease though.
         print("d real: ", (d_loss_real, d_acc_real))
-        print("d fake: ", (d_loss_fake, d_loss_fake))
+        print("d fake: ", (d_loss_fake, d_acc_fake))
         print("g loss: ", (g_loss, g_acc))
 
         if e % 100 == 0:
