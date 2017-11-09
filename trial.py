@@ -394,7 +394,7 @@ def sanitize_images(images):
         images[i] = img_to_array(array_to_img(images[i]))
     return images
 
-def execute(epochs, batch_size, noise_shape, train_generator, discriminator, generator, gan, generator_starting_epoch, save_models):
+def execute(epochs, batch_size, noise_shape, train_generator, discriminator, generator, gan, generator_starting_epoch, save_models, debug_batch):
     d_losses_real = []
     d_losses_fake = []
     g_losses = []
@@ -404,7 +404,8 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
         d_loss_real = d_acc_real = d_loss_fake = d_acc_fake = g_loss = g_acc = batch_count = 0
         for batch, label in train_generator:
             try:
-                print("-" * 15, "Batch %d" % batch_count, "-" * 15)
+                if debug_batch:
+                    print("-" * 15, "Batch %d" % batch_count, "-" * 15)
                 # Get a random set of input noise and images
                 real_data = batch
                 noise = np.random.normal(0, 0.2, size=(batch_size, ) + noise_shape)
@@ -417,29 +418,35 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
                 # discriminator_labels = np.concatenate((real_label, fake_label))
 
                 # Train discriminator
-                print("discriminator start...", end="")
+                if debug_batch:
+                    print("discriminator start...", end="")
                 discriminator.trainable = True
                 generator.trainable = False
                 d_loss_real, d_acc_real = discriminator.train_on_batch(
                     real_data, real_label)
-                print("real training done...", end="")
+                if debug_batch:
+                    print("real training done...", end="")
                 d_loss_fake, d_acc_fake = discriminator.train_on_batch(
                     fake_data, fake_label)
                 # d_loss, d_acc = discriminator.train_on_batch(discriminator_images,
                 #                                              discriminator_labels)
-                print("done")
+                if debug_batch:
+                    print("done")
 
                 # Train generator
                 if e > generator_starting_epoch:
-                    print("generator start...", end="")
+                    if debug_batch:
+                        print("generator start...", end="")
                     discriminator.trainable = False
                     generator.trainable = True
                     gan_noise = np.random.normal(0, 1, size=(batch_size, ) + noise_shape)
                     gan_label = real_label
                     g_loss, g_acc = gan.train_on_batch(gan_noise, gan_label)
-                    print("done")
+                    if debug_batch:
+                        print("done")
                 else:
-                    print("not training generator because epoch %d is smaller than starting point %d" % (e, generator_starting_epoch))
+                    if debug_batch:
+                        print("not training generator because epoch %d is smaller than starting point %d" % (e, generator_starting_epoch))
 
                 # Store loss of most recent batch from this epoch
                 d_losses_real.append(d_loss_real)
@@ -483,7 +490,7 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
     return True
 
 
-def train(epochs, batch_size, input_shape, noise_shape, generator_starting_epoch, save_models, train_data_directory):
+def train(epochs, batch_size, input_shape, noise_shape, generator_starting_epoch, save_models, debug_batch, train_data_directory):
     setup()
     train_generator = data_generator(batch_size, train_data_directory)
     discriminator, generator, gan = build_network(input_shape, noise_shape)
@@ -492,7 +499,7 @@ def train(epochs, batch_size, input_shape, noise_shape, generator_starting_epoch
     while run:
         try:
             status = execute(epochs, batch_size, noise_shape, train_generator,
-                              discriminator, generator, gan, generator_starting_epoch, save_models)
+                              discriminator, generator, gan, generator_starting_epoch, save_models, debug_batch)
             if status:
                 print("[INFO] Model Completed")
                 run = False
@@ -510,7 +517,7 @@ def train(epochs, batch_size, input_shape, noise_shape, generator_starting_epoch
 
 def main():
     print("[STATUS] TRAINING START")
-    train(100000, 32, (64, 64, 3), (1, 1, 128), 2000, False, "/data/shibberu/dataset-download/faces")
+    train(100000, 32, (64, 64, 3), (1, 1, 128), 2000, False, False, "/data/shibberu/dataset-download/faces")
 
 if __name__ == "__main__":
     main()
