@@ -518,7 +518,7 @@ def train(epochs, batch_size, input_shape, noise_shape, generator_starting_epoch
 
 def main():
     print("[STATUS] TRAINING START")
-    train(100000, 32, (64, 64, 3), (1, 1, 128), 2000, False, False, "/data/shibberu/dataset-download/faces")
+    train(100000, 32, (64, 64, 3), (1, 1, 128), 5, False, False, "/data/shibberu/dataset-download/faces")
 
 if __name__ == "__main__":
     main()
