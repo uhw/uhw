@@ -467,17 +467,18 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
         if d_loss_real >= 15 or d_loss_fake >= 15 or g_loss >= 15:
             stagnation_counter += 1
 
-            if stagnation_counter >= 10 and e < 100:
+            if stagnation_counter >= 5:
                 return False
+        else:
+            stagnation_counter = 0
         batch_count += 1
 
-        if e % 100 == 0:
-            # print("saving generated image...", end="")
-            for i in range(fake_data.shape[0]):
-                g_image = array_to_img(256 * fake_data[i])
-                g_image.save(
-                    "./collected_data/gan_generated_image_epoch_{0}_{1}.png".format(e, i))
-                # print("done")
+        # print("saving generated image...", end="")
+        for i in range(fake_data.shape[0]):
+            g_image = array_to_img(256 * fake_data[i])
+            g_image.save(
+                "./collected_data/gan_generated_image_epoch_{0}_{1}.png".format(e, i))
+            # print("done")
 
         if save_models and (e == 1 or e % 20 == 0):
             print("saving model...", end="")
