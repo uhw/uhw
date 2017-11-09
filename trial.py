@@ -453,14 +453,6 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
                 d_losses_fake.append(d_loss_fake)
                 g_losses.append(g_loss)
 
-                # According to this Github (https://github.com/forcecore/Keras-GAN-Animeface-Character),
-                # the network will simply fail if any of these start at 15.
-                if d_loss_real >= 15 or d_loss_fake >= 15 or g_loss >= 15:
-                    stagnation_counter += 1
-
-                    if stagnation_counter >= 10 and e < 100:
-                        return False
-                batch_count += 1
             except Exception as exp:
                 print(exp)
                 break
@@ -469,6 +461,15 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
         print("d real: ", (d_loss_real, d_acc_real))
         print("d fake: ", (d_loss_fake, d_acc_fake))
         print("g loss: ", (g_loss, g_acc))
+
+        # According to this Github (https://github.com/forcecore/Keras-GAN-Animeface-Character),
+        # the network will simply fail if any of these start at 15.
+        if d_loss_real >= 15 or d_loss_fake >= 15 or g_loss >= 15:
+            stagnation_counter += 1
+
+            if stagnation_counter >= 10 and e < 100:
+                return False
+        batch_count += 1
 
         if e % 100 == 0:
             # print("saving generated image...", end="")
