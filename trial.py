@@ -106,7 +106,6 @@ class AnimeGeneratorFactory():
         NUM_RESIDUAL = 16
         NUM_SUBPIXEL = 2
         FINAL_FILTERS = 3
-        #FINAL_FILTERS = 1
         INITIAL_FILTERS = 64
 
         def residual_block(layer, filters, momentum):
@@ -390,8 +389,8 @@ def save_models(epoch, generator, discriminator, gan):
     print("done")
 
 def sanitize_images(images):
-    for i in range(images.shape[0]):
-        images[i] = img_to_array(array_to_img(images[i]))
+    # for i in range(images.shape[0]):
+    #     images[i] = img_to_array(array_to_img(images[i]))
     return images
 
 def execute(epochs, batch_size, noise_shape, train_generator, discriminator, generator, gan, generator_starting_epoch, save_models, debug_batch):
@@ -474,16 +473,22 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
         batch_count += 1
 
         # print("saving generated image...", end="")
-        for i in range(fake_data.shape[0]):
-            g_image = array_to_img(256 * fake_data[i])
-            g_image.save(
-                "./collected_data/gan_generated_image_epoch_{0}_{1}.png".format(e, i))
-            # print("done")
+        try:
+            for i in range(fake_data.shape[0]):
+                g_image = array_to_img(256 * fake_data[i])
+                g_image.save(
+                    "./collected_data/gan_generated_image_epoch_{0}_{1}.png".format(e, i))
+                # print("done")
+        except Exception as exp:
+            print(exp)
 
-        if save_models and (e == 1 or e % 20 == 0):
-            print("saving model...", end="")
-            save_models(e, generator, discriminator, gan)
-            print("done")
+        try:
+            if save_models and (e == 1 or e % 20 == 0):
+                print("saving model...", end="")
+                save_models(e, generator, discriminator, gan)
+                print("done")
+        except Exception as exp:
+            print(exp)
 
         if e >= epochs:
             break
