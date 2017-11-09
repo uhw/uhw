@@ -429,6 +429,7 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
 
         # Train generator
         g_loss = 0
+        g_acc = 0
         if e > generator_starting_epoch:
             print("generator start...", end="")
             discriminator.trainable = False
@@ -443,11 +444,7 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
         # Store loss of most recent batch from this epoch
         d_losses_real.append(d_loss_real)
         d_losses_fake.append(d_loss_fake)
-        # If not training generator, append 0 as placeholder
-        if e > generator_starting_epoch:
-            g_losses.append(g_loss)
-        else:
-            g_losses.append(0)
+        g_losses.append(g_loss)
 
         # According to this Github (https://github.com/forcecore/Keras-GAN-Animeface-Character),
         # the network will simply fail if any of these start at 15.
@@ -468,7 +465,7 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
                 g_image = array_to_img(256 * fake_data[i])
                 g_image.save(
                     "./collected_data/gan_generated_image_epoch_{0}_{1}.png".format(e, i))
-            # print("done")
+                # print("done")
 
         if e == 1 or e % 20 == 0:
             # print("saving model...", end="")
