@@ -394,7 +394,7 @@ def sanitize_images(images):
         images[i] = img_to_array(array_to_img(images[i]))
     return images
 
-def execute(epochs, batch_size, noise_shape, train_generator, discriminator, generator, gan, generator_starting_epoch):
+def execute(epochs, batch_size, noise_shape, train_generator, discriminator, generator, gan, generator_starting_epoch, save_models):
     e = 0
     d_losses_real = []
     d_losses_fake = []
@@ -456,7 +456,7 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
 
         # Log some data. Accuracy will probably be 0. We want the loss to decrease though.
         print("d real: ", (d_loss_real, d_acc_real))
-        print("d loss: ", (d_loss_fake, d_acc_real))
+        print("d fake: ", (d_loss_fake, d_acc_real))
         print("g loss: ", (g_loss, g_acc))
 
         if e % 100 == 0:
@@ -467,10 +467,10 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
                     "./collected_data/gan_generated_image_epoch_{0}_{1}.png".format(e, i))
                 # print("done")
 
-        if e == 1 or e % 20 == 0:
-            # print("saving model...", end="")
+        if save_models and (e == 1 or e % 20 == 0):
+            print("saving model...", end="")
             save_models(e, generator, discriminator, gan)
-            # print("done")
+            print("done")
 
         if e >= epochs:
             break
@@ -479,7 +479,7 @@ def execute(epochs, batch_size, noise_shape, train_generator, discriminator, gen
     return True
 
 
-def train(epochs, batch_size, input_shape, noise_shape, generator_starting_epoch, train_data_directory):
+def train(epochs, batch_size, input_shape, noise_shape, generator_starting_epoch, save_models, train_data_directory):
     setup()
     train_generator = data_generator(batch_size, train_data_directory)
     discriminator, generator, gan = build_network(input_shape, noise_shape)
@@ -488,7 +488,7 @@ def train(epochs, batch_size, input_shape, noise_shape, generator_starting_epoch
     while run:
         try:
             status = execute(epochs, batch_size, noise_shape, train_generator,
-                              discriminator, generator, gan, generator_starting_epoch)
+                              discriminator, generator, gan, generator_starting_epoch, save_models)
             if status:
                 print("[INFO] Model Completed")
                 run = False
@@ -506,7 +506,7 @@ def train(epochs, batch_size, input_shape, noise_shape, generator_starting_epoch
 
 def main():
     print("[STATUS] TRAINING START")
-    train(100000, 32, (64, 64, 3), (1, 1, 128), 200, "/data/shibberu/dataset-download/faces")
+    train(100000, 32, (64, 64, 3), (1, 1, 128), 2000, False, "/data/shibberu/dataset-download/faces")
 
 if __name__ == "__main__":
     main()
