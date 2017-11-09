@@ -394,16 +394,13 @@ def sanitize_images(images):
         images[i] = img_to_array(array_to_img(images[i]))
     return images
 
-def execute(epochs, batch_size, input_shape, noise_shape, train_generator, discriminator, generator, gan):
+def execute(epochs, batch_size, noise_shape, train_generator, discriminator, generator, gan, generator_starting_epoch):
     e = 0
     d_losses_real = []
     d_losses_fake = []
     g_losses = []
     stagnation_counter = 0
     for batch, label in train_generator:
-        dloss = 0
-        gloss = 0
-
         print("-" * 15, "Epoch %d" % e, "-" * 15)
 
         # Get a random set of input noise and images
@@ -431,13 +428,16 @@ def execute(epochs, batch_size, input_shape, noise_shape, train_generator, discr
         print("done")
 
         # Train generator
-        print("generator start...", end="")
-        discriminator.trainable = False
-        generator.trainable = True
-        gan_noise = np.random.normal(0, 1, size=(batch_size, ) + noise_shape)
-        gan_label = real_label
-        g_loss, g_acc = gan.train_on_batch(gan_noise, gan_label)
-        print("done")
+        if e > generator_starting_epoch:
+            print("generator start...", end="")
+            discriminator.trainable = False
+            generator.trainable = True
+            gan_noise = np.random.normal(0, 1, size=(batch_size, ) + noise_shape)
+            gan_label = real_label
+            g_loss, g_acc = gan.train_on_batch(gan_noise, gan_label)
+            print("done")
+        else:
+            print("not training generator because epoch %d is smaller than starting point %d" % (e, generator_starting_epoch))
 
         # Store loss of most recent batch from this epoch
         d_losses_real.append(d_loss_real)
@@ -477,7 +477,7 @@ def execute(epochs, batch_size, input_shape, noise_shape, train_generator, discr
     return True
 
 
-def train(epochs, batch_size, input_shape, noise_shape, train_data_directory):
+def train(epochs, batch_size, input_shape, noise_shape, generator_starting_epoch, train_data_directory):
     setup()
     train_generator = data_generator(batch_size, train_data_directory)
     discriminator, generator, gan = build_network(input_shape, noise_shape)
@@ -485,8 +485,8 @@ def train(epochs, batch_size, input_shape, noise_shape, train_data_directory):
     run = True
     while run:
         try:
-            status = execute(epochs, batch_size, input_shape, noise_shape, train_generator,
-                              discriminator, generator, gan)
+            status = execute(epochs, batch_size, noise_shape, train_generator,
+                              discriminator, generator, gan, generator_starting_epoch)
             if status:
                 print("[INFO] Model Completed")
                 run = False
@@ -504,7 +504,7 @@ def train(epochs, batch_size, input_shape, noise_shape, train_data_directory):
 
 def main():
     print("[STATUS] TRAINING START")
-    train(100000, 32, (64, 64, 3), (1, 1, 128), "/data/shibberu/dataset-download/faces")
+    train(100000, 32, (64, 64, 3), (1, 1, 128), 200, "/data/shibberu/dataset-download/faces")
 
 if __name__ == "__main__":
     main()
