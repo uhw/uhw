@@ -1,5 +1,5 @@
 import os
-from keras.layers import BatchNormalization, LeakyReLU, Add
+from keras.layers import BatchNormalization, LeakyReLU, Add, Flatten
 from keras.layers import Conv2D
 from keras.layers import Conv2DTranspose
 from keras.layers import Dense, Activation, Reshape
@@ -242,6 +242,58 @@ class AnimeDiscriminatorFactory(object):
             Output:
                 Keras Model
         """
+
+        def get_disc_normal(image_shape=(64, 64, 3)):
+            image_shape = image_shape
+
+            dropout_prob = 0.4
+
+            # kernel_init = RandomNormal(mean=0.0, stddev=0.01)
+            kernel_init = 'glorot_uniform'
+
+            dis_input = Input(shape=image_shape)
+
+            discriminator = Conv2D(filters=64, kernel_size=(4, 4), strides=(2, 2), padding="same",
+                                   data_format="channels_last", kernel_initializer=kernel_init)(dis_input)
+            discriminator = LeakyReLU(0.2)(discriminator)
+            # discriminator = MaxPooling2D(pool_size=(2, 2))(discriminator)
+
+            # discriminator = Dropout(dropout_prob)(discriminator)
+            discriminator = Conv2D(filters=128, kernel_size=(4, 4), strides=(2, 2), padding="same",
+                                   data_format="channels_last", kernel_initializer=kernel_init)(discriminator)
+            discriminator = BatchNormalization(momentum=0.5)(discriminator)
+            discriminator = LeakyReLU(0.2)(discriminator)
+            # discriminator = MaxPooling2D(pool_size=(2, 2))(discriminator)
+
+            # discriminator = Dropout(dropout_prob)(discriminator)
+            discriminator = Conv2D(filters=256, kernel_size=(4, 4), strides=(2, 2), padding="same",
+                                   data_format="channels_last", kernel_initializer=kernel_init)(discriminator)
+            discriminator = BatchNormalization(momentum=0.5)(discriminator)
+            discriminator = LeakyReLU(0.2)(discriminator)
+            # discriminator = MaxPooling2D(pool_size=(2, 2))(discriminator)
+
+            # discriminator = Dropout(dropout_prob)(discriminator)
+            discriminator = Conv2D(filters=512, kernel_size=(4, 4), strides=(2, 2), padding="same",
+                                   data_format="channels_last", kernel_initializer=kernel_init)(discriminator)
+            discriminator = BatchNormalization(momentum=0.5)(discriminator)
+            discriminator = LeakyReLU(0.2)(discriminator)
+            # discriminator = MaxPooling2D(pool_size=(2, 2))(discriminator)
+
+            discriminator = Flatten()(discriminator)
+
+            # discriminator = MinibatchDiscrimination(100,5)(discriminator)
+            discriminator = Dense(1)(discriminator)
+            discriminator = Activation('sigmoid')(discriminator)
+
+            dis_opt = Adam(lr=0.0002, beta_1=0.5)
+            discriminator_model = Model(input=dis_input, output=discriminator)
+            discriminator_model.compile(loss='binary_crossentropy', optimizer=dis_opt, metrics=['accuracy'])
+            discriminator_model.summary()
+            return discriminator_model
+
+
+        return get_disc_normal(input_shape)
+
         RESIDUAL_BLOCKS_PER_LAYER = 2
         LEAKY_RELU_ALPHA = 0.2
         MODULES = 5
