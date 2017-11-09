@@ -352,7 +352,7 @@ class AnimeDiscriminatorFactory(object):
             discriminator = Activation('sigmoid')(discriminator)
 
             dis_opt = Adam(lr=0.0002, beta_1=0.5)
-            discriminator_model = Model(input=dis_input, output=discriminator)
+            discriminator_model = Model(inputs=dis_input, outputs=discriminator)
             discriminator_model.compile(loss='binary_crossentropy', optimizer=dis_opt, metrics=['accuracy'])
             discriminator_model.summary()
             return discriminator_model
