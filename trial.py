@@ -1,10 +1,10 @@
 import os
-from keras.layers import BatchNormalization, LeakyReLU, Add, Flatten
-from keras.layers import Conv2D
-from keras.layers import Conv2DTranspose
-from keras.layers import Dense, Activation, Reshape
+from keras.layers import BatchNormalization, LeakyReLU, Add, Flatten, Conv2D, Conv2DTranspose, Dense, Activation, Reshape
 from keras.models import Input, Model
 from keras.optimizers import Adam
+import matplotlib.pyplot as plt
+import numpy as np
+from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array
 
 #### --- for hinton
 import tensorflow as tf
@@ -14,11 +14,6 @@ config.gpu_options.per_process_gpu_memory_fraction = 0.9
 sess = tf.Session(config=config)
 K.set_session(sess)
 ####
-
-import matplotlib.pyplot as plt
-import numpy as np
-from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array
-
 
 class Subpixel(Conv2D):
     def __init__(self,
@@ -101,79 +96,6 @@ class AnimeGeneratorFactory():
                 Keras Model
         """
 
-        def get_gen_normal(noise_shape):
-            noise_shape = noise_shape
-            """
-            Changing padding = 'same' in the first layer makes a lot fo difference!!!!
-            """
-            # kernel_init = RandomNormal(mean=0.0, stddev=0.01)
-            kernel_init = 'glorot_uniform'
-
-            gen_input = Input(shape=noise_shape)  # if want to directly use with conv layer next
-            # gen_input = Input(shape = [noise_shape]) #if want to use with dense layer next
-
-            generator = Conv2DTranspose(filters=512, kernel_size=(4, 4), strides=(1, 1), padding="valid",
-                                        data_format="channels_last", kernel_initializer=kernel_init)(gen_input)
-            generator = BatchNormalization(momentum=0.5)(generator)
-            generator = LeakyReLU(0.2)(generator)
-
-            # generator = bilinear2x(generator,256,kernel_size=(4,4))
-            # generator = UpSampling2D(size=(2, 2))(generator)
-            # generator = SubPixelUpscaling(scale_factor=2)(generator)
-            # generator = Conv2D(filters = 256, kernel_size = (4,4), strides = (1,1), padding = "same", data_format = "channels_last", kernel_initializer = kernel_init)(generator)
-            generator = Conv2DTranspose(filters=256, kernel_size=(4, 4), strides=(2, 2), padding="same",
-                                        data_format="channels_last", kernel_initializer=kernel_init)(generator)
-            generator = BatchNormalization(momentum=0.5)(generator)
-            generator = LeakyReLU(0.2)(generator)
-
-            # generator = bilinear2x(generator,128,kernel_size=(4,4))
-            # generator = UpSampling2D(size=(2, 2))(generator)
-            # generator = SubPixelUpscaling(scale_factor=2)(generator)
-            # generator = Conv2D(filters = 128, kernel_size = (4,4), strides = (1,1), padding = "same", data_format = "channels_last", kernel_initializer = kernel_init)(generator)
-            generator = Conv2DTranspose(filters=128, kernel_size=(4, 4), strides=(2, 2), padding="same",
-                                        data_format="channels_last", kernel_initializer=kernel_init)(generator)
-            generator = BatchNormalization(momentum=0.5)(generator)
-            generator = LeakyReLU(0.2)(generator)
-
-            # generator = bilinear2x(generator,64,kernel_size=(4,4))
-            # generator = UpSampling2D(size=(2, 2))(generator)
-            # generator = SubPixelUpscaling(scale_factor=2)(generator)
-            # generator = Conv2D(filters = 64, kernel_size = (4,4), strides = (1,1), padding = "same", data_format = "channels_last", kernel_initializer = kernel_init)(generator)
-            generator = Conv2DTranspose(filters=64, kernel_size=(4, 4), strides=(2, 2), padding="same",
-                                        data_format="channels_last", kernel_initializer=kernel_init)(generator)
-            generator = BatchNormalization(momentum=0.5)(generator)
-            generator = LeakyReLU(0.2)(generator)
-
-            generator = Conv2D(filters=64, kernel_size=(3, 3), strides=(1, 1), padding="same",
-                               data_format="channels_last", kernel_initializer=kernel_init)(generator)
-            generator = BatchNormalization(momentum=0.5)(generator)
-            generator = LeakyReLU(0.2)(generator)
-
-            # generator = bilinear2x(generator,3,kernel_size=(3,3))
-            # generator = UpSampling2D(size=(2, 2))(generator)
-            # generator = SubPixelUpscaling(scale_factor=2)(generator)
-            # generator = Conv2D(filters = 3, kernel_size = (4,4), strides = (1,1), padding = "same", data_format = "channels_last", kernel_initializer = kernel_init)(generator)
-            generator = Conv2DTranspose(filters=3, kernel_size=(4, 4), strides=(2, 2), padding="same",
-                                        data_format="channels_last", kernel_initializer=kernel_init)(generator)
-            generator = Activation('tanh')(generator)
-
-            gen_opt = Adam(lr=0.00015, beta_1=0.5)
-            generator_model = Model(input=gen_input, output=generator)
-            generator_model.compile(loss='binary_crossentropy', optimizer=gen_opt, metrics=['accuracy'])
-            generator_model.summary()
-
-            return generator_model
-
-        return get_gen_normal(input_shape)
-
-        MOMENTUM = 0.9
-        DIM = 16
-        DEPTH = 64
-        NUM_RESIDUAL = 16
-        NUM_SUBPIXEL = 2
-        FINAL_FILTERS = 3
-        INITIAL_FILTERS = 64
-
         def residual_block(layer, filters, momentum):
             """
                 Residual Block consisting of
@@ -188,13 +110,11 @@ class AnimeGeneratorFactory():
                     Keras layer
             """
             shortcut = layer
-            layer = Conv2D(filters=filters, kernel_size=(
-                3, 3), strides=(1, 1), padding="same")(layer)
-            layer = BatchNormalization(momentum=momentum)(layer)
+            layer = Conv2D(filters=filters, kernel_size=(3, 3), strides=(1, 1), padding="same")(layer)
+            layer = BatchNormalization(momentum=momentum)(layer, training=1)
             layer = Activation("relu")(layer)
-            layer = Conv2D(filters=filters, kernel_size=(
-                3, 3), strides=(1, 1), padding="same")(layer)
-            layer = BatchNormalization(momentum=momentum)(layer)
+            layer = Conv2D(filters=filters, kernel_size=(3, 3), strides=(1, 1), padding="same")(layer)
+            layer = BatchNormalization(momentum=momentum)(layer, training=1)
 
             layer = Add()([layer, shortcut])
             return layer
@@ -239,7 +159,7 @@ class AnimeGeneratorFactory():
             # r = upscale factor
             layer = Subpixel(filters=filters, kernel_size=(3, 3), r=2, padding="same")(layer)
 
-            layer = BatchNormalization(momentum=momentum)(layer)
+            layer = BatchNormalization(momentum=momentum)(layer, training=1)
             layer = Activation("relu")(layer)
             return layer
 
@@ -262,19 +182,28 @@ class AnimeGeneratorFactory():
                 layer = subpixel_block(layer, filters, momentum)
             return layer
 
-        inputs = Input(shape=input_shape)
-        filters = INITIAL_FILTERS
-        layer = Dense(DEPTH * DIM * DIM)(inputs)
+        MOMENTUM = 0.9
+        DIM = 16
+        DEPTH = 64
+        NUM_RESIDUAL = 16
+        NUM_SUBPIXEL = 2
+        FINAL_FILTERS = 3
+        INITIAL_FILTERS = 64
 
-        layer = BatchNormalization(momentum=MOMENTUM)(layer)
+        inputs = Input(shape=input_shape)
+        filters = INITIAL_FILTERS # 64
+
+        layer = Dense(DEPTH * DIM * DIM)(inputs)
+        layer = BatchNormalization(momentum=MOMENTUM)(layer, training=1)
         layer = Activation("relu")(layer)
         layer = Reshape((DIM, DIM, DEPTH))(layer)
+
         old = layer
 
         # 16 residual layers
         layer = residual_layer(layer, NUM_RESIDUAL, filters, MOMENTUM)
 
-        layer = BatchNormalization(momentum=MOMENTUM)(layer)
+        layer = BatchNormalization(momentum=MOMENTUM)(layer, training=1)
         layer = Activation("relu")(layer)
         layer = Add()([layer, old])
 
@@ -287,10 +216,10 @@ class AnimeGeneratorFactory():
         layer = Activation("tanh")(layer)
 
         model = Model(inputs=inputs, outputs=layer)
-        optimizer = Adam(lr=0.00015, beta_1=0.5)
-        model.compile(loss="binary_crossentropy",
-                      optimizer=optimizer,
-                      metrics=["accuracy"])
+        # optimizer = Adam(lr=0.0002, beta_1=0.5)
+        # model.compile(loss="binary_crossentropy",
+        #               optimizer=optimizer,
+        #               metrics=["accuracy"])
         return model
 
 
@@ -308,57 +237,6 @@ class AnimeDiscriminatorFactory(object):
             Output:
                 Keras Model
         """
-
-        def get_disc_normal(image_shape=(64, 64, 3)):
-            image_shape = image_shape
-
-            dropout_prob = 0.4
-
-            # kernel_init = RandomNormal(mean=0.0, stddev=0.01)
-            kernel_init = 'glorot_uniform'
-
-            dis_input = Input(shape=image_shape)
-
-            discriminator = Conv2D(filters=64, kernel_size=(4, 4), strides=(2, 2), padding="same",
-                                   data_format="channels_last", kernel_initializer=kernel_init)(dis_input)
-            discriminator = LeakyReLU(0.2)(discriminator)
-            # discriminator = MaxPooling2D(pool_size=(2, 2))(discriminator)
-
-            # discriminator = Dropout(dropout_prob)(discriminator)
-            discriminator = Conv2D(filters=128, kernel_size=(4, 4), strides=(2, 2), padding="same",
-                                   data_format="channels_last", kernel_initializer=kernel_init)(discriminator)
-            discriminator = BatchNormalization(momentum=0.5)(discriminator)
-            discriminator = LeakyReLU(0.2)(discriminator)
-            # discriminator = MaxPooling2D(pool_size=(2, 2))(discriminator)
-
-            # discriminator = Dropout(dropout_prob)(discriminator)
-            discriminator = Conv2D(filters=256, kernel_size=(4, 4), strides=(2, 2), padding="same",
-                                   data_format="channels_last", kernel_initializer=kernel_init)(discriminator)
-            discriminator = BatchNormalization(momentum=0.5)(discriminator)
-            discriminator = LeakyReLU(0.2)(discriminator)
-            # discriminator = MaxPooling2D(pool_size=(2, 2))(discriminator)
-
-            # discriminator = Dropout(dropout_prob)(discriminator)
-            discriminator = Conv2D(filters=512, kernel_size=(4, 4), strides=(2, 2), padding="same",
-                                   data_format="channels_last", kernel_initializer=kernel_init)(discriminator)
-            discriminator = BatchNormalization(momentum=0.5)(discriminator)
-            discriminator = LeakyReLU(0.2)(discriminator)
-            # discriminator = MaxPooling2D(pool_size=(2, 2))(discriminator)
-
-            discriminator = Flatten()(discriminator)
-
-            # discriminator = MinibatchDiscrimination(100,5)(discriminator)
-            discriminator = Dense(1)(discriminator)
-            discriminator = Activation('sigmoid')(discriminator)
-
-            dis_opt = Adam(lr=0.0002, beta_1=0.5)
-            discriminator_model = Model(inputs=dis_input, outputs=discriminator)
-            discriminator_model.compile(loss='binary_crossentropy', optimizer=dis_opt, metrics=['accuracy'])
-            discriminator_model.summary()
-            return discriminator_model
-
-
-        return get_disc_normal(input_shape)
 
         RESIDUAL_BLOCKS_PER_LAYER = 2
         LEAKY_RELU_ALPHA = 0.2
@@ -444,30 +322,21 @@ class AnimeDiscriminatorFactory(object):
             intermediate_kernel_size = (3, 3)
             if i < 2:
                 intermediate_kernel_size = (4, 4)
-            layer = intermediate_layer(
-                layer, filters, intermediate_kernel_size)
+            layer = intermediate_layer(layer, filters, intermediate_kernel_size)
 
-        outputs = Dense(1, activation="sigmoid")(layer)
+        layer = Dense(1, activation="sigmoid")(layer)
+        outputs = Reshape((1, ))(layer)
 
-        reshaped_output = Reshape((1,))(outputs)
-
-        model = Model(inputs=inputs, outputs=reshaped_output)
-
-        optimizer = Adam(lr=0.0002, beta_1=0.5)
-        model.compile(loss="binary_crossentropy",
-                      optimizer=optimizer,
-                      metrics=["accuracy"])
-
+        model = Model(inputs=inputs, outputs=outputs)
         return model
 
 def setup():
-    if not os.path.isdir("./collected_data"):
-        os.makedirs("./collected_data")
-        print("made collected_data dir")
-
-    if not os.path.isdir("./collected_models"):
-        os.makedirs("./collected_models")
-        print("made collected_models dir")
+    if not os.path.isdir("./images"):
+        os.makedirs("./images")
+        print("[ INFO ] images directory created")
+    if not os.path.isdir("./saved_models"):
+        os.makedirs("./saved_models")
+        print("[ INFO ] saved_models directory created")
 
 def data_generator(batch_size, train_data_directory):
     train_datagen = ImageDataGenerator(shear_range=0.2,
@@ -480,169 +349,124 @@ def data_generator(batch_size, train_data_directory):
     return train_generator
 
 
-def build_network(input_shape, noise_shape):
+def build_network(input_shape, noise_size, lambda_param):
+    print("[ INFO ] building network...", end="")
     discriminator = AnimeDiscriminatorFactory().build(input_shape)
-    generator = AnimeGeneratorFactory().build(noise_shape)
+    generator = AnimeGeneratorFactory().build((noise_size, ))
 
-    gan_inputs = Input(noise_shape)
-    generator_outputs = generator(gan_inputs)
-    gan_outputs = discriminator(generator_outputs)
-    gan = Model(inputs=gan_inputs, outputs=gan_outputs)
-    optimizer = Adam(lr=0.00015, beta_1=0.5)
-    gan.compile(loss="binary_crossentropy",
-                optimizer=optimizer,
-                metrics=["accuracy"])
-    return (discriminator, generator, gan)
+    # Compute Wasserstein Loss and Gradient Penalty
+    d_real_input = Input(shape=input_shape)
+    noise = Input(shape=(noise_size, )) # Ex: shape = (128, )
+    d_fake_input = generator(noise)
+
+    epsilon_input = K.placeholder(shape=(None, ) + input_shape)
+    d_mixed_input = Input(shape=input_shape, tensor=d_real_input + epsilon_input)
+
+    loss_real = K.mean(discriminator(d_real_input))
+    loss_fake = K.mean(discriminator(d_fake_input))
+
+    gradient_mixed = K.gradients(discriminator(d_mixed_input), [d_mixed_input])[0]
+    normalized_gradient_mixed = K.sqrt(K.sum(K.square(gradient_mixed), axis=[1, 2, 3]))
+    gradient_penalty = K.mean(K.square(normalized_gradient_mixed - 1))
+
+    loss = loss_fake - loss_real + (lambda_param * gradient_penalty)
+
+    # Discriminator
+    training_updates = Adam(lr=0.000001).get_updates(discriminator.trainable_weights, [], loss)
+    discriminator_train = K.function([d_real_input, noise, epsilon_input],
+                                     [loss_real, loss_fake],
+                                     training_updates)
+    # Generator
+    loss = -loss_fake
+    training_updates = Adam(lr=0.000001).get_updates(generator.trainable_weights, [], loss)
+    generator_train = K.function([noise], [loss], training_updates)
+
+    print("done")
+    return (discriminator, generator, discriminator_train, generator_train)
 
 # Save the generator and discriminator networks (and weights) for later use
-
-
-def save_models(epoch, generator, discriminator, gan):
-    print("saving model...", end="")
-    generator.save(
-        "./collected_models/gan_generator_epoch_{0}.h5".format(epoch))
-    discriminator.save(
-        "./collected_models/gan_discriminator_epoch_{0}.h5".format(epoch))
-    gan.save("./collected_models/gan_core_epoch_{0}.h5".format(epoch))
+def save_models(epoch, generator, discriminator):
+    print("[ INFO ] saving model...", end="")
+    generator.save("./saved_models/gan_generator_epoch_{0}.h5".format(epoch))
+    discriminator.save("./saved_models/gan_discriminator_epoch_{0}.h5".format(epoch))
     print("done")
 
-def sanitize_images(images):
-    # for i in range(images.shape[0]):
-    #     images[i] = img_to_array(array_to_img(images[i]))
-    return images
+def save_images(images, epoch, generation):
+    print("[ INFO ] saving images...", end="")
+    for i in range(images.shape[0]):
+        g_image = array_to_img(images[i])
+        g_image.save("./images/generated_image_{0}_{1}_{2}.png".format(epoch, generation, i))
+    print("done")
 
-def execute(epochs, batch_size, noise_shape, train_generator, discriminator, generator, gan, generator_starting_epoch, save_models, debug_batch):
-    d_losses_real = []
-    d_losses_fake = []
-    g_losses = []
-    stagnation_counter = 0
-    for e in range(epochs):
-        print("-" * 15, "Epoch %d" % e, "-" * 15)
-        d_loss_real = d_acc_real = d_loss_fake = d_acc_fake = g_loss = g_acc = batch_count = 0
+def execute2(epochs, batch_size, noise_size, train_generator, networks):
+    discriminator, generator, discriminator_train, generator_train = networks
+    generation = 0
+    noise_shape = (batch_size, noise_size)
+    fixed_noise = np.random.normal(size=noise_shape).astype("float32")
+    batches = train_generator.samples // batch_size
+
+    g_error = 0
+    epoch = 0
+    batch_counter = 0
+    while epoch < epochs:
         for batch, label in train_generator:
-            try:
-                if debug_batch:
-                    print("-" * 15, "Batch %d" % batch_count, "-" * 15)
-                # Get a random set of input noise and images
-                real_data = batch
-                noise = np.random.normal(0, 0.2, size=(batch_size, ) + noise_shape)
-                fake_data = sanitize_images(generator.predict(noise))
-                # discriminator_images = np.concatenate([real_data, fake_data])
+            batch_counter += 1
 
-                # Labels for generated and real data
-                real_label = np.ones(batch_size) - np.random.random_sample(batch_size) * 0.2
-                fake_label = np.random.random_sample(batch_size) * 0.2
-                # discriminator_labels = np.concatenate((real_label, fake_label))
-
-                # Train discriminator
-                if debug_batch:
-                    print("discriminator start...", end="")
-                discriminator.trainable = True
-                generator.trainable = False
-                d_loss_real, d_acc_real = discriminator.train_on_batch(
-                    real_data, real_label)
-                if debug_batch:
-                    print("real training done...", end="")
-                d_loss_fake, d_acc_fake = discriminator.train_on_batch(
-                    fake_data, fake_label)
-                # d_loss, d_acc = discriminator.train_on_batch(discriminator_images,
-                #                                              discriminator_labels)
-                if debug_batch:
-                    print("done")
-
-                # Train generator
-                if e > generator_starting_epoch:
-                    if debug_batch:
-                        print("generator start...", end="")
-                    discriminator.trainable = False
-                    generator.trainable = True
-                    gan_noise = np.random.normal(0, 1, size=(batch_size, ) + noise_shape)
-                    gan_label = real_label
-                    g_loss, g_acc = gan.train_on_batch(gan_noise, gan_label)
-                    if debug_batch:
-                        print("done")
-                else:
-                    if debug_batch:
-                        print("not training generator because epoch %d is smaller than starting point %d" % (e, generator_starting_epoch))
-
-                # Store loss of most recent batch from this epoch
-                d_losses_real.append(d_loss_real)
-                d_losses_fake.append(d_loss_fake)
-                g_losses.append(g_loss)
-
-            except Exception as exp:
-                print(exp)
+            # Leave after finishing all batches or executing for 100 cycles.
+            if batch.shape[0] != batch_size:
+                print("[ INFO ] Epoch Completed {0}".format(epoch))
+                batch_counter = 0
+                epoch += 1
+                break
+            elif batch_counter % 100 == 0:
+                print("[ INFO ] Trained on {0} Batches".format(batch_counter))
                 break
 
-        # Log some data. Accuracy will probably be 0. We want the loss to decrease though.
-        print("d real: ", (d_loss_real, d_acc_real))
-        print("d fake: ", (d_loss_fake, d_acc_fake))
-        print("g loss: ", (g_loss, g_acc))
+            real_data = batch
+            noise = np.random.normal(size=noise_shape)
+            epsilon = real_data.std() * np.random.uniform(-0.5, 0.5, size=real_data.shape)
+            epsilon *= np.random.uniform(size=(batch_size, 1, 1, 1))
 
-        # According to this Github (https://github.com/forcecore/Keras-GAN-Animeface-Character),
-        # the network will simply fail if any of these start at 15.
-        if d_loss_real >= 15 or d_loss_fake >= 15 or g_loss >= 15:
-            stagnation_counter += 1
+            d_real_error, d_fake_error = discriminator_train([real_data, noise, epsilon])
+            d_error = d_real_error - d_fake_error
 
-            if stagnation_counter >= 5:
-                return False
-        else:
-            stagnation_counter = 0
-        batch_count += 1
+        noise = np.random.normal(size=noise_shape)
+        g_error, = generator_train([noise])
 
-        # print("saving generated image...", end="")
-        try:
-            for i in range(fake_data.shape[0]):
-                g_image = array_to_img(256 * fake_data[i])
-                g_image.save(
-                    "./collected_data/gan_generated_image_epoch_{0}_{1}.png".format(e, i))
-                # print("done")
-        except Exception as exp:
-            print(exp)
+        print("[{0}/{1}][{2}/{3}] generation: {4} d_loss: {5} g_loss: {6} d_real: {7}, d_fake: {8}".format(epoch, epochs, batch_counter, batches, generation, d_error, g_error, d_real_error, d_fake_error))
 
-        try:
-            if save_models and (e == 1 or e % 20 == 0):
-                print("saving model...", end="")
-                save_models(e, generator, discriminator, gan)
-                print("done")
-        except Exception as exp:
-            print(exp)
+        if generation % 10 == 0:
+            # print("[{0}/{1}][{2}/{3}] d_loss: {4} g_loss: {5} d_real: {6}, d_fake: {7}".format(epoch, epochs, batch_counter, batches, d_error, g_error, d_real_error, d_fake_error))
+            fake = generator.predict(fixed_noise)
+            save_images(fake, epoch, generation)
+            save_models(epoch, generator, discriminator)
 
-        if e >= epochs:
-            break
-        e += 1
+        generation += 1
 
-    return True
-
-
-def train(epochs, batch_size, input_shape, noise_shape, generator_starting_epoch, save_models, debug_batch, train_data_directory):
+def train2(epochs, batch_size, input_shape, noise_size, lambda_param, train_data_directory):
     setup()
     train_generator = data_generator(batch_size, train_data_directory)
-    discriminator, generator, gan = build_network(input_shape, noise_shape)
+    # Outputs Keras functions that takes inputs:
+    # discriminator(real_input, noise, epsilon)
+    # Inputs:
+    #       - real_input = same as input_shape
+    #       - noise = (batch_size, noise_size)
+    #       - epsilon = (None, batch_size, ) + input_shape -- a 5D tensor (really 4D)
+    # Outputs:
+    #       - (discriminator_real_error, discriminator_fake_error)
+    #
+    # generator(noise)
+    # Inputs:
+    #       - noise = same as for discriminator
+    # Outputs:
+    #       - generator_error
+    networks = build_network(input_shape, noise_size, lambda_param)
+    execute2(epochs, batch_size, noise_size, train_generator, networks)
 
-    run = True
-    while run:
-        try:
-            status = execute(epochs, batch_size, noise_shape, train_generator,
-                              discriminator, generator, gan, generator_starting_epoch, save_models, debug_batch)
-            if status:
-                print("[INFO] Model Completed")
-                run = False
-            else:
-                print("[INFO] stagnant GAN")
-                run = True
-                train_generator = data_generator(batch_size, train_data_directory)
-                discriminator, generator, gan = build_network(input_shape, noise_shape)
-        except Exception as e:
-            print(e)
-            run = True
-            train_generator = data_generator(batch_size, train_data_directory)
-            discriminator, generator, gan = build_network(input_shape, noise_shape)
-            pass
 
 def main():
-    print("[STATUS] TRAINING START")
-    train(100000, 32, (64, 64, 3), (1, 1, 128), 5, False, False, "/data/shibberu/dataset-download/faces")
+    print("[ INFO ] initialized")
+    train2(100000, 32, (64, 64, 3), 128, 10, "/data/shibberu/dataset-download/faces")
 
 if __name__ == "__main__":
     main()
