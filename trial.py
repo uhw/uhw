@@ -2,9 +2,14 @@ import os
 from keras.layers import BatchNormalization, LeakyReLU, Add, Flatten, Conv2D, Conv2DTranspose, Dense, Activation, Reshape
 from keras.models import Input, Model
 from keras.optimizers import Adam
+from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
+from keras.initializers import RandomNormal
+from keras.losses import binary_crossentropy
+
+import glob
+from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
-from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array
 
 #### --- for hinton
 import tensorflow as tf
@@ -95,6 +100,7 @@ class AnimeGeneratorFactory():
             Output:
                 Keras Model
         """
+        GAMMA_INITIALIZER = RandomNormal(1., 0.02)
 
         def residual_block(layer, filters, momentum):
             """
@@ -111,10 +117,10 @@ class AnimeGeneratorFactory():
             """
             shortcut = layer
             layer = Conv2D(filters=filters, kernel_size=(3, 3), strides=(1, 1), padding="same")(layer)
-            layer = BatchNormalization(momentum=momentum)(layer, training=1)
+            layer = BatchNormalization(momentum=momentum, gamma_initializer=GAMMA_INITIALIZER)(layer, training=1)
             layer = Activation("relu")(layer)
             layer = Conv2D(filters=filters, kernel_size=(3, 3), strides=(1, 1), padding="same")(layer)
-            layer = BatchNormalization(momentum=momentum)(layer, training=1)
+            layer = BatchNormalization(momentum=momentum, gamma_initializer=GAMMA_INITIALIZER)(layer, training=1)
 
             layer = Add()([layer, shortcut])
             return layer
@@ -159,7 +165,7 @@ class AnimeGeneratorFactory():
             # r = upscale factor
             layer = Subpixel(filters=filters, kernel_size=(3, 3), r=2, padding="same")(layer)
 
-            layer = BatchNormalization(momentum=momentum)(layer, training=1)
+            layer = BatchNormalization(momentum=momentum, gamma_initializer=GAMMA_INITIALIZER)(layer, training=1)
             layer = Activation("relu")(layer)
             return layer
 
@@ -194,7 +200,7 @@ class AnimeGeneratorFactory():
         filters = INITIAL_FILTERS # 64
 
         layer = Dense(DEPTH * DIM * DIM)(inputs)
-        layer = BatchNormalization(momentum=MOMENTUM)(layer, training=1)
+        layer = BatchNormalization(momentum=MOMENTUM, gamma_initializer=GAMMA_INITIALIZER)(layer, training=1)
         layer = Activation("relu")(layer)
         layer = Reshape((DIM, DIM, DEPTH))(layer)
 
@@ -203,7 +209,7 @@ class AnimeGeneratorFactory():
         # 16 residual layers
         layer = residual_layer(layer, NUM_RESIDUAL, filters, MOMENTUM)
 
-        layer = BatchNormalization(momentum=MOMENTUM)(layer, training=1)
+        layer = BatchNormalization(momentum=MOMENTUM, gamma_initializer=GAMMA_INITIALIZER)(layer, training=1)
         layer = Activation("relu")(layer)
         layer = Add()([layer, old])
 
@@ -216,10 +222,6 @@ class AnimeGeneratorFactory():
         layer = Activation("tanh")(layer)
 
         model = Model(inputs=inputs, outputs=layer)
-        # optimizer = Adam(lr=0.0002, beta_1=0.5)
-        # model.compile(loss="binary_crossentropy",
-        #               optimizer=optimizer,
-        #               metrics=["accuracy"])
         return model
 
 
@@ -242,6 +244,8 @@ class AnimeDiscriminatorFactory(object):
         LEAKY_RELU_ALPHA = 0.2
         MODULES = 5
 
+        KERNEL_INITIALIZER = RandomNormal(0, 0.02)
+
         def intermediate_layer(layer, filters, kernel_size):
             """
                 Create the intermediate layers between residual layers.
@@ -253,7 +257,8 @@ class AnimeDiscriminatorFactory(object):
                     Keras layer
             """
             layer = Conv2D(filters=filters, kernel_size=kernel_size,
-                           strides=(2, 2), padding="same")(layer)
+                           kernel_initializer=KERNEL_INITIALIZER, strides=(2, 2),
+                           padding="same")(layer)
             layer = LeakyReLU(alpha=LEAKY_RELU_ALPHA)(layer)
             return layer
 
@@ -280,10 +285,10 @@ class AnimeDiscriminatorFactory(object):
                     Keras layer
             """
             shortcut = layer
-            layer = Conv2D(filters=filters, kernel_size=(3, 3),
+            layer = Conv2D(filters=filters, kernel_size=(3, 3), kernel_initializer=KERNEL_INITIALIZER,
                            strides=(1, 1), padding="same")(layer)
             layer = LeakyReLU(alpha=LEAKY_RELU_ALPHA)(layer)
-            layer = Conv2D(filters=filters, kernel_size=(3, 3),
+            layer = Conv2D(filters=filters, kernel_size=(3, 3), kernel_initializer=KERNEL_INITIALIZER,
                            strides=(1, 1), padding="same")(layer)
 
             layer = Add()([layer, shortcut])
@@ -337,11 +342,12 @@ def setup():
     if not os.path.isdir("./saved_models"):
         os.makedirs("./saved_models")
         print("[ INFO ] saved_models directory created")
+    if not os.path.isdir("./saved_losses"):
+        os.makedirs("./saved_losses")
+        print("[ INFO ] saved_losses directory created")
 
 def data_generator(batch_size, train_data_directory):
-    train_datagen = ImageDataGenerator(shear_range=0.2,
-                                       zoom_range=0.2,
-                                       horizontal_flip=True)
+    train_datagen = ImageDataGenerator()
     train_generator = train_datagen.flow_from_directory(train_data_directory,
                                                         target_size=(64, 64),
                                                         batch_size=batch_size,
@@ -356,35 +362,42 @@ def build_network(input_shape, noise_size, lambda_param):
 
     # Compute Wasserstein Loss and Gradient Penalty
     d_real_input = Input(shape=input_shape)
-    noise = Input(shape=(noise_size, )) # Ex: shape = (128, )
+    noise = Input(shape=(noise_size, ))
     d_fake_input = generator(noise)
 
     epsilon_input = K.placeholder(shape=(None, ) + input_shape)
-    d_mixed_input = Input(shape=input_shape, tensor=d_real_input + epsilon_input)
+    d_mixed_input = Input(shape=input_shape, tensor=(d_real_input + epsilon_input))
 
-    loss_real = K.mean(discriminator(d_real_input))
-    loss_fake = K.mean(discriminator(d_fake_input))
+    d_real = discriminator(d_real_input)
+    d_fake = discriminator(d_fake_input)
+    d_loss_real = K.mean(binary_crossentropy(K.ones_like(d_real), d_real))
+    d_loss_fake = K.mean(binary_crossentropy(K.zeros_like(d_fake), d_fake))
+    g_loss = K.mean(binary_crossentropy(K.ones_like(d_fake), d_fake))
 
     gradient_mixed = K.gradients(discriminator(d_mixed_input), [d_mixed_input])[0]
-    normalized_gradient_mixed = K.sqrt(K.sum(K.square(gradient_mixed), axis=[1, 2, 3]))
+    normalized_gradient_mixed = K.sqrt(K.sum(K.square(gradient_mixed), axis=1))
     gradient_penalty = K.mean(K.square(normalized_gradient_mixed - 1))
 
-    loss = loss_fake - loss_real + (lambda_param * gradient_penalty)
+    d_loss = d_loss_real + d_loss_fake + (lambda_param * gradient_penalty)
 
     # Discriminator
-    training_updates = Adam(lr=0.000001).get_updates(discriminator.trainable_weights, [], loss)
+    training_updates = Adam(lr=0.000001, beta_1=0.5, beta_2=0.9).get_updates(discriminator.trainable_weights, [], d_loss)
     discriminator_train = K.function([d_real_input, noise, epsilon_input],
-                                     [loss_real, loss_fake],
+                                     [d_loss, d_loss_real, d_loss_fake],
                                      training_updates)
     # Generator
-    loss = -loss_fake
-    training_updates = Adam(lr=0.000001).get_updates(generator.trainable_weights, [], loss)
-    generator_train = K.function([noise], [loss], training_updates)
+    training_updates = Adam(lr=0.000001, beta_1=0.5, beta_2=0.9).get_updates(generator.trainable_weights, [], g_loss)
+    generator_train = K.function([noise], [g_loss], training_updates)
 
     print("done")
     return (discriminator, generator, discriminator_train, generator_train)
 
-# Save the generator and discriminator networks (and weights) for later use
+def load_images():
+    print("[ INFO ] loading images...", end="")
+    images = np.load("./normalized_images.npy")
+    print("done")
+    return images
+
 def save_models(epoch, generator, discriminator):
     print("[ INFO ] saving model...", end="")
     generator.save("./saved_models/gan_generator_epoch_{0}.h5".format(epoch))
@@ -398,54 +411,76 @@ def save_images(images, epoch, generation):
         g_image.save("./images/generated_image_{0}_{1}_{2}.png".format(epoch, generation, i))
     print("done")
 
-def execute2(epochs, batch_size, noise_size, train_generator, networks):
+def save_errors(d_real_errors, d_fake_errors, g_errors):
+    np.save("./saved_losses/d_real_errors.npy", np.array(d_real_errors))
+    np.save("./saved_losses/d_fake_errors.npy", np.array(d_fake_errors))
+    np.save("./saved_losses/g_errors.npy", np.array(g_errors))
+
+def execute(epochs, batch_size, noise_size, images, networks):
     discriminator, generator, discriminator_train, generator_train = networks
     generation = 0
     noise_shape = (batch_size, noise_size)
     fixed_noise = np.random.normal(size=noise_shape).astype("float32")
-    batches = train_generator.samples // batch_size
+    batches = images.shape[0] // batch_size
 
     g_error = 0
-    epoch = 0
-    batch_counter = 0
-    while epoch < epochs:
-        for batch, label in train_generator:
-            batch_counter += 1
+    d_real_errors = []
+    d_fake_errors = []
+    g_errors = []
+    for epoch in range(epochs):
+        np.random.shuffle(images)
+        batch_counter = 0
 
-            # Leave after finishing all batches or executing for 100 cycles.
-            if batch.shape[0] != batch_size:
-                print("[ INFO ] Epoch Completed {0}".format(epoch))
-                batch_counter = 0
-                epoch += 1
-                break
-            elif batch_counter % 100 == 0:
-                print("[ INFO ] Trained on {0} Batches".format(batch_counter))
-                break
+        # Execute all mini-batches.
+        while batch_counter < batches:
+            # Determine the number of Discriminator Training between Generator Trains.
+            d_iteration = 5
+            # Pretrain discriminator for the first few generations heavily.
+            if generation < 20 or generation % 500 == 0:
+                d_iteration = 100
 
-            real_data = batch
+            # Train the discriminator 5 or 100 times or finish the batch (whichever comes first).
+            while d_iteration > 0 and batch_counter < batches:
+                # Grab batch (real_data) from images.
+                real_data = images[batch_counter * batch_size : (batch_counter + 1) * batch_size]
+
+                # Get noises (noise = generator noise, epsilon = perturb image noise).
+                noise = np.random.normal(size=noise_shape)
+                epsilon = real_data.std() * np.random.uniform(-0.5, 0.5, size=real_data.shape)
+                epsilon *= np.random.uniform(size=(batch_size, 1, 1, 1))
+
+                # Compute errors.
+                d_error, d_real_error, d_fake_error = discriminator_train([real_data, noise, epsilon])
+
+                # Store errors.
+                d_real_errors.append(d_real_error)
+                d_fake_errors.append(d_fake_error)
+
+                # Increment/Decrement counter values.
+                batch_counter += 1 # mini_batch completed
+                d_iteration -= 1   # discriminator cycle decrement
+
             noise = np.random.normal(size=noise_shape)
-            epsilon = real_data.std() * np.random.uniform(-0.5, 0.5, size=real_data.shape)
-            epsilon *= np.random.uniform(size=(batch_size, 1, 1, 1))
+            g_error, = generator_train([noise])
+            g_errors.append(g_error)
 
-            d_real_error, d_fake_error = discriminator_train([real_data, noise, epsilon])
-            d_error = d_real_error - d_fake_error
+            # Log every 10 generations.
+            if generation % 10 == 0:
+                print("[{0}/{1}][{2}/{3}] generation: {4} d_loss: {5} g_loss: {6} d_real: {7}, d_fake: {8}".format(epoch, epochs, batch_counter, batches, generation, d_error, g_error, d_real_error, d_fake_error))
 
-        noise = np.random.normal(size=noise_shape)
-        g_error, = generator_train([noise])
+            # Save every 500 generations.
+            if generation % 500 == 0:
+                fake = generator.predict(fixed_noise)
+                save_images(fake, epoch, generation)
+                save_models(epoch, generator, discriminator)
+                save_errors(d_real_errors, d_fake_errors, g_errors)
 
-        print("[{0}/{1}][{2}/{3}] generation: {4} d_loss: {5} g_loss: {6} d_real: {7}, d_fake: {8}".format(epoch, epochs, batch_counter, batches, generation, d_error, g_error, d_real_error, d_fake_error))
+            generation += 1
 
-        if generation % 10 == 0:
-            # print("[{0}/{1}][{2}/{3}] d_loss: {4} g_loss: {5} d_real: {6}, d_fake: {7}".format(epoch, epochs, batch_counter, batches, d_error, g_error, d_real_error, d_fake_error))
-            fake = generator.predict(fixed_noise)
-            save_images(fake, epoch, generation)
-            save_models(epoch, generator, discriminator)
-
-        generation += 1
-
-def train2(epochs, batch_size, input_shape, noise_size, lambda_param, train_data_directory):
+def train(epochs, batch_size, input_shape, noise_size, lambda_param):
     setup()
-    train_generator = data_generator(batch_size, train_data_directory)
+    # train_generator = data_generator(batch_size, train_data_directory)
+    images = load_images()
     # Outputs Keras functions that takes inputs:
     # discriminator(real_input, noise, epsilon)
     # Inputs:
@@ -461,12 +496,13 @@ def train2(epochs, batch_size, input_shape, noise_size, lambda_param, train_data
     # Outputs:
     #       - generator_error
     networks = build_network(input_shape, noise_size, lambda_param)
-    execute2(epochs, batch_size, noise_size, train_generator, networks)
+    print("[ INFO ] training started")
+    execute(epochs, batch_size, noise_size, images, networks)
 
 
 def main():
     print("[ INFO ] initialized")
-    train2(100000, 32, (64, 64, 3), 128, 10, "/data/shibberu/dataset-download/faces")
+    train(100000, 32, (64, 64, 3), 128, 20)
 
 if __name__ == "__main__":
     main()
