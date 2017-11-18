@@ -89,7 +89,7 @@ class Subpixel(Conv2D):
         return config
 
 
-class AnimeGeneratorFactory():
+class AnimeGeneratorFactory(object):
     def build(self, input_shape):
         """
             Returns a generator Model described here: https://arxiv.org/pdf/1708.05509.pdf
@@ -370,9 +370,8 @@ def build_network(input_shape, noise_size, lambda_param):
 
     d_real = discriminator(d_real_input)
     d_fake = discriminator(d_fake_input)
-    d_loss_real = K.mean(binary_crossentropy(K.ones_like(d_real), d_real))
-    d_loss_fake = K.mean(binary_crossentropy(K.zeros_like(d_fake), d_fake))
-    g_loss = K.mean(binary_crossentropy(K.ones_like(d_fake), d_fake))
+    d_loss_real = K.mean(d_real)
+    d_loss_fake = K.mean(d_fake)
 
     gradient_mixed = K.gradients(discriminator(d_mixed_input), [d_mixed_input])[0]
     normalized_gradient_mixed = K.sqrt(K.sum(K.square(gradient_mixed), axis=1))
@@ -381,12 +380,13 @@ def build_network(input_shape, noise_size, lambda_param):
     d_loss = d_loss_real + d_loss_fake + (lambda_param * gradient_penalty)
 
     # Discriminator
-    training_updates = Adam(lr=0.000001, beta_1=0.5, beta_2=0.9).get_updates(discriminator.trainable_weights, [], d_loss)
+    training_updates = Adam(lr=0.0000001, beta_1=0.5, beta_2=0.9).get_updates(discriminator.trainable_weights, [], d_loss)
     discriminator_train = K.function([d_real_input, noise, epsilon_input],
                                      [d_loss, d_loss_real, d_loss_fake],
                                      training_updates)
     # Generator
-    training_updates = Adam(lr=0.000001, beta_1=0.5, beta_2=0.9).get_updates(generator.trainable_weights, [], g_loss)
+    g_loss = -d_loss_fake
+    training_updates = Adam(lr=0.0000001, beta_1=0.5, beta_2=0.9).get_updates(generator.trainable_weights, [], g_loss)
     generator_train = K.function([noise], [g_loss], training_updates)
 
     print("done")
@@ -464,6 +464,8 @@ def execute(epochs, batch_size, noise_size, images, networks):
             g_error, = generator_train([noise])
             g_errors.append(g_error)
 
+            print("[{0}/{1}][{2}/{3}] generation: {4} d_loss: {5} g_loss: {6} d_real: {7}, d_fake: {8}".format(epoch, epochs, batch_counter, batches, generation, d_error, g_error, d_real_error, d_fake_error))
+
             # Log every 10 generations.
             if generation % 10 == 0:
                 print("[{0}/{1}][{2}/{3}] generation: {4} d_loss: {5} g_loss: {6} d_real: {7}, d_fake: {8}".format(epoch, epochs, batch_counter, batches, generation, d_error, g_error, d_real_error, d_fake_error))
@@ -502,7 +504,7 @@ def train(epochs, batch_size, input_shape, noise_size, lambda_param):
 
 def main():
     print("[ INFO ] initialized")
-    train(100000, 32, (64, 64, 3), 128, 20)
+    train(100000, 32, (64, 64, 3), 64, 20)
 
 if __name__ == "__main__":
     main()
